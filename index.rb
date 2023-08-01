@@ -4,7 +4,7 @@ require 'sqlite3'
 
 class BaltoConsultation < Sinatra::Base
   enable :sessions
-  attr_accessor :pet, :pet_name, :sex, :breed, :k1, :age_years, :age_months, :age_total_months, :lifestage, :neuter, :k3, :body_condition, :nec, :weight_current, :weight_adult, :weight_target, :activity_level, :k2, :recovery_routine, :food_type, :food_brand, :ingredient_exclusion, :dental_brushing, :dental_chews, :wellness_issues, :email, :age_adult_months, :age_senior_years, :mer, :diet_mix
+  attr_accessor :pet, :pet_name, :sex, :breed, :k1, :age_years, :age_months, :age_total_months, :lifestage, :neuter, :k3, :body_condition, :nec, :weight_current, :weight_adult, :weight_target, :activity_level, :k2, :stimulation, :food_type, :food_brand, :ingredient_exclusion, :dental_brushing, :dental_chews, :wellness_issues, :email, :age_adult_months, :age_senior_years, :mer, :diet_mix
 
   #Initialize variables to store user's answers
     @pet = ""
@@ -28,7 +28,7 @@ class BaltoConsultation < Sinatra::Base
     @activity_level = ""
     #@k2 is an activity level adjustment factor, that we use to calculate the pet's daily caloric needs (session[:mer]). This information is stored in our dog breeds databse
     @k2 = 0
-    @recovery_routine = ""
+    @stimulation = ""
     @food_type = ""
     @food_brand = ""
     @ingredient_exclusion = ""
@@ -229,13 +229,13 @@ end
 
   post '/activity_level' do
     activity_level = params[:activity_level]
+    session[:stimulation] = params[:stimulation]
     if activity_level == "Lazy"
       session[:k2] = 0.8
     elsif activity_level == "Normal"
       session[:k2] = 0.9
     else
       session[:k2] = 1.1
-      session[:recovery_routine] = params[:recovery_routine]
     end
     session[:activity_level] = activity_level
     redirect '/food'
@@ -251,24 +251,17 @@ end
   post '/food' do
     session[:food_type] = params[:food_type]
     session[:food_brand] = params[:food_brand]
+
+    if session[:food_brand] != "Unknown brand"
+      db = SQLite3::Database.new 'balto.db'
+      brand_score = db.execute("SELECT scoring FROM food_brands WHERE name=?", session[:food_brand]).first
+      db.close
+      session[:food_brand_score] = brand_score[0].to_i
+    end
+  
     redirect '/ingredient_exclusion'
   end  
   
-  # Tip currently not working - to be fixed later
-  get '/api/brand_tip' do
-    puts params[:brand]
-    db = SQLite3::Database.new 'balto.db'
-    @brand = params[:brand]
-    brand_tip = db.execute("SELECT comment FROM food_brands WHERE name=?", [@brand]).first
-    db.close
-    content_type :json
-    if brand_tip
-      {brand_tip: brand_tip[0]}.to_json
-    else
-      {brand_tip: nil}.to_json
-    end    
-
-end
 
 get '/ingredient_exclusion' do
   erb :ingredient_exclusion, locals: { pet_name: session[:pet_name] }
@@ -505,13 +498,184 @@ post '/dental_care' do
     end
 
   get '/dummy' do
-    spider_chart_nutrition = 5
-    spider_chart_activity = 5
-    spider_chart_dental = 5
-    spider_chart_body = 5
-    spider_chart_mobility = 5
     
+    # Define spider chart scoring
     
+      # Nutrition score logic
+        # Food quality = 80% of the nutrition score
+  
+        # When kibble only or kibble + wet
+        if session[:food_type].length == session[:food_type].count("Dry food") || (session[:food_type].length == session[:food_type].count("Dry food") + session[:food_type].count("Wet food"))
+          if session[:food_brand] == "Unknown brand"
+            # Default kibble score is 3/5 if no breed is provided
+            dry_quality_score = 3
+          else
+            # Kibble score is dictated by food database when brand is known
+            dry_quality_score = session[:food_brand_score]
+          end
+          food_quality_score = dry_quality_score.to_f * 0.8
+        # When kibble + raw or home-cooked
+        else
+          if session[:food_brand] == "Unknown brand"
+            dry_quality_score = 3
+          else
+            dry_quality_score = session[:food_brand_score]
+          end
+          # Assume Dry food brings 75% of MER, and give 5/5 score to the 25% provided by raw/ home-cooked
+          food_quality_score = ((dry_quality_score.to_f * 0.75 ) + (5.0 * 0.25)) * 0.8
+        end
+        
+        # Digestion issues = 10% of the nutrition score
+        if session[:wellness_issues].include?("Digestion issues")
+          food_digestion_score = 0
+        else
+          food_digestion_score = 5 * 0.1
+        end
+
+        # Hydration = 10% of the nutrition score
+        if session[:food_type].length == session[:food_type].count("Dry food")
+          food_hydration_score = 3 * 0.1
+        else
+          food_hydration_score = 5 * 0.1
+        end
+
+      # Define spider chart Nutrition score as the Maximum between the Sum of the Food quality + digestion + hydration, and 3.5 (minimum score)
+      session[:spider_chart_nutrition] = [(food_quality_score + food_digestion_score + food_hydration_score).round(1),3.5].max
+
+      # Dental logic
+        # Dental brushing score
+      if session[:dental_brushing] == "Less than once a month"
+        dental_brushing_score = 1.0 * 0.5
+      elsif session[:dental_brushing] == "Once a month"
+        dental_brushing_score = 3.0 * 0.5
+      else
+        dental_brushing_score = 5.0 * 0.5
+      end
+
+        # Dental chews score
+      if session[:dental_chews] == "No"
+        dental_chewing_score = 1.0 * 0.5
+      else
+        dental_chewing_score = 5.0 * 0.5
+      end
+
+        # Dental condition reduces Dental score by 0.5
+      if session[:wellness_issues].include?("Dental issues")
+        dental_issues = -0.5
+      else
+        dental_issues = 0
+      end
+
+      # Dental score rescored from 3 to 5
+      session[:spider_chart_dental] = [(dental_brushing_score + dental_chewing_score + dental_issues).round(1),3.5].max
+
+      # Skin logic
+      spider_chart_skin = 5
+      case
+      when session[:wellness_issues].include?("Demangeaisons regulières")
+        spider_chart_skin -= 0.5
+      when session[:wellness_issues].include?("Dermatite atopique / Eczema")
+        spider_chart_skin -= 1
+      when session[:wellness_issues].include?("Parasites")
+        spider_chart_skin -= 0.5
+      when session[:wellness_issues].include?("Poil très rêche ou terne")
+        spider_chart_skin -= 0.5
+      else
+        spider_chart_skin = 5
+      end
+      session[:spider_chart_skin] = spider_chart_skin
+
+      # Body and activity logic
+      # Current body condition (50% of score)
+      if session[:nec] != 5
+        body_condition_score = 3.0 * 0.5
+      else
+        body_condition_score = 5.0 * 0.5
+      end
+
+      # Base activity level score (50% of score)
+      case session[:activity_level]
+      when "Lazy" 
+        activity_level_score = 2.0 * 0.5
+      when "Normal"
+        activity_level_score = 4.0 * 0.5
+      else
+        activity_level_score = 5.0 * 0.5
+      end
+
+      # Mobility issues score adjustment
+      mobility_issues_score = 0
+      case
+      when session[:wellness_issues].include?("Arthrose")
+        mobility_issues_score -= 1 unless session[:activity_level] == "Lazy"
+      when session[:wellness_issues].include?("Raideurs")
+        mobility_issues_score -= 0.5 unless session[:activity_level] == "Lazy"
+      when session[:wellness_issues].include?("Dysplasie")
+        mobility_issues_score -= 1 unless session[:activity_level] == "Lazy"
+      when session[:wellness_issues].include?("Opération affectant les articulations")
+        mobility_issues_score -= 1 unless session[:activity_level] == "Lazy"
+      else
+        mobility_issues_score = 0
+      end
+        
+      # Combine activity and mobility issues scores
+      activity_level_score += mobility_issues_score
+
+      # Dental score, rescored from 3.5 to 5
+      session[:spider_chart_body] = [(body_condition_score + activity_level_score).round(1), 3.5].max
+
+      # Mental stimulation logic
+      # Base activity level score (50% of score)
+      case session[:activity_level]
+      when "Lazy" 
+        activity_level_score = 2.0 * 0.5
+      when "Normal"
+        activity_level_score = 4.0 * 0.5
+      else
+        activity_level_score = 5.0 * 0.5
+      end
+
+      # Access to chewing (25% of score)
+      if session[:dental_chews] == "No"
+        dental_chewing_score = 1.0 * 0.25
+      else
+        dental_chewing_score = 5.0 * 0.25
+      end
+
+      # Engagement in stimulating activities (25% of score)
+      case
+      when session[:stimulation] == "Very rarely"
+        stimulation_score = 1 * 0.25
+      when session[:stimulation] == "Occasionally"
+        stimulation_score = 2 * 0.25
+      when session[:stimulation] == "Fairly often"
+        stimulation_score = 4 * 0.25
+      when session[:stimulation] == "Daily"
+        stimulation_score = 5 * 0.25
+      else
+        stimulation_score = 5 * 0.25
+      end
+
+      # Mental health score adjustment
+      mental_issues_score = 0
+      case
+      when session[:wellness_issues].include?("Anxiété de séparation")
+        mental_issues_score -= 1
+      when session[:wellness_issues].include?("Trouble obsessionnel compulsif")
+        mental_issues_score -= 1
+      when session[:wellness_issues].include?("Peur")
+        mental_issues_score -= 1
+      when session[:wellness_issues].include?("Agressivité")
+        mental_issues_score -= 1
+      when session[:wellness_issues].include?("Aboiements excessifs")
+        mental_issues_score -= 1
+      else
+        mental_issues_score = 0
+      end
+
+      # Mental stimulation score, rescored from 3.5 to 5
+      session[:spider_chart_mental] = [(activity_level_score + dental_chewing_score + stimulation_score + mental_issues_score).round(1), 3.5].max
+
     # Group pet tips by chart Axis and subgroups, and then pass them to front-end  
     
     # Connect to the database
@@ -577,9 +741,10 @@ post '/dental_care' do
       weight_target: session[:weight_target],
       activity_level: session[:activity_level], 
       k2: session[:k2],
-      recovery_routine: session[:recovery_routine],
+      stimulation: session[:stimulation],
       food_type: session[:food_type],
       food_brand: session[:food_brand],
+      food_brand_score: session[:food_brand_score],
       ingredient_exclusion: session[:ingredient_exclusion],
       dental_brushing: session[:dental_brushing],
       dental_chews: session[:dental_chews],
@@ -595,13 +760,12 @@ post '/dental_care' do
       pet_tips: session[:pet_tips],
       tip_ids: session[:tip_ids],
       grouped_tips: session[:grouped_tips],
-      spider_chart_nutrition: spider_chart_nutrition,
-      spider_chart_activity: spider_chart_activity,
-      spider_chart_dental: spider_chart_dental,
-      spider_chart_body: spider_chart_body,
-      spider_chart_mobility: spider_chart_mobility }
+      spider_chart_nutrition: session[:spider_chart_nutrition],
+      spider_chart_dental: session[:spider_chart_dental],
+      spider_chart_skin: session[:spider_chart_skin],
+      spider_chart_body: session[:spider_chart_body],
+      spider_chart_mental: session[:spider_chart_mental] }
   
-   
   end
 
 BaltoConsultation.run!

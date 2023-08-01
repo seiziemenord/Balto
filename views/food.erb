@@ -13,14 +13,13 @@
       <option value="Raw">Raw</option>
       <option value="Home-cooked">Home-cooked</option>
     </select>
-  <div id="food_brand" style="display:none;">
-    <select name="food_brand" id="food_brand">
+  <div id="food_brand_container" style="display:none;">
+    <select name="food_brand" id="food_brand_select">
     <option value="unknown_brand" selected>Please select</option>
       <% food_brands.each do |brand| %>
           <option value="<%= brand %>"><%= brand %></option>
       <% end %>
     </select>
-    <div id="brand_tip"></div>
     <div>
       <input type="checkbox" id="unknown-brand" name="unknown-brand" value="Unknown brand">
       <label for="unknown-brand">I don't know the food brand</label>
@@ -33,18 +32,10 @@
     // Show the food brand question if " “Dry food” OR “Wet food” selected
     $("#food_type").change(function(){
       if ($(this).val().includes("Dry food") || $(this).val().includes("Wet food")) {
-        $("#food_brand").show();
+        $("#food_brand_container").show();
       } else {
-        $("#food_brand").hide();
+        $("#food_brand_container").hide();
       }
-    });
-
-    // Show the brand tip
-    $("#food_brand").change(function(){
-      var selectedBrand = $(this).val();
-      $.get("/api/brand_tip", { brand: selectedBrand }, function(data) {
-          $("#brand_tip").html(data.brand_tip);
-      });
     });
 
     // Event listener for when the continue button is clicked
@@ -52,7 +43,7 @@
       event.preventDefault();
 
       var food_type = $("#food_type").val();
-      var food_brand = $("#food_brand").val();
+      var food_brand = $("#food_brand_select").val();
       var unknown_brand = $("#unknown-brand").is(":checked");
 
       if (unknown_brand) {

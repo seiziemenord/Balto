@@ -28,6 +28,7 @@
   <h2>recovery_routine: <%= session[:recovery_routine] %></h2>
   <h2>food_type: <%= session[:food_type] %></h2>
   <h2>food_brand: <%= session[:food_brand] %></h2>
+  <h2>Food brand score: <%= session[:food_brand_score] %></h2>
   <h2>ingredient_exclusion: <%= session[:ingredient_exclusion] %></h2>
   <h2>dental_brushing: <%= session[:dental_brushing] %></h2>
   <h2>dental_chews: <%= session[:dental_chews] %></h2>
@@ -43,8 +44,9 @@
   <h2>Pet tips IDs: <%= session[:pet_tips] %></h2>
   <h2>Tip IDs array: <%= session[:tip_ids] %></h2>
   <h2>Grouped tips: <%= session[:grouped_tips] %></h2>
-
-
+  <h2>Spider chart nutrition axis: <%= session[:spider_chart_nutrition] %></h2>
+  <h2>Spider chart skin  axis: <%= session[:spider_chart_skin] %></h2>
+    
   <h2>Spider chart:</h2>
 
   <div style="height: 300px">
@@ -55,18 +57,24 @@
   new Chart(ctx, {
     type: 'radar',
     data: {
-      labels: ['Nutrition', 'Activity', 'Dental', 'Body', 'Mobility'],
+      labels: ['Nutrition', 'Mental', 'Dental', 'Body', 'Skin'],
       datasets: [{
         label: 'Pet wellness profile',
         backgroundColor: 'rgba(255, 99, 132, 0.2)',
         borderColor: 'rgba(255, 99, 132, 1)',
-        data: [5, 5, 5, 5, 5]
+        data: [<%= session[:spider_chart_nutrition] %>, <%= session[:spider_chart_mental] %>, <%= session[:spider_chart_dental] %>, <%= session[:spider_chart_body] %>, <%= session[:spider_chart_skin] %>]
       }]
     },
     options: {
+      responsive: false,
+      maintainAspectRatio: true,
       scale: {
+        min: 0,
+        max: 5,
         ticks: {
-          beginAtZero: true
+          beginAtZero: true,
+          min: 0,
+          max: 5
         }
       }
     }

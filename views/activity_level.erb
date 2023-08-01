@@ -12,42 +12,37 @@
   <input type="radio" name="activity-level" value="Normal"> Normal<br>
   <input type="radio" name="activity-level" value="Very active"> Very active
   <br><br>
-  <div id="recovery-question" style="display:none;">
-    <h3>How often do you follow a routine to maximize <%= pet_name %>'s post-exercise recovery?</h3>
-    <input type="radio" name="recovery-routine" value="Don't really do anything"> Don't really do anything<br>
-    <input type="radio" name="recovery-routine" value="Pretty often"> Pretty often<br>
-    <input type="radio" name="recovery-routine" value="Always"> Always
+  <div id="stimulation" style="display:none;">
+    <h3>On a typical day, how much do you engage in stimulating activities with <%= pet_name %> such as playing, training sessions, or socializing with other dogs?</h3>
+      <input type="radio" name="stimulation" value="Very rarely">Very rarely<br>
+      <input type="radio" name="stimulation" value="Occasionally">Occasionally<br>
+      <input type="radio" name="stimulation" value="Fairly often">Fairly often<br>
+      <input type="radio" name="stimulation" value="Daily">Daily<br>
   </div>
   <br><br>
   <button type="submit" id="submit-activity-level">Submit</button>
 </form>
 
 <script>
-  $(document).ready(function(){
-    // Show the recovery question if "Very active" is selected
-    $("input[name='activity-level']").change(function(){
-      if ($(this).val() === "Very active") {
-        $("#recovery-question").show();
-      } else {
-        $("#recovery-question").hide();
-      }
+    $(document).ready(function(){
+      // Show the recovery question all the time
+      $("#stimulation").show();
     });
 
     $("#submit-activity-level").click(function(e){
       e.preventDefault();
       var activity_level = $("input[name='activity-level']:checked").val();
-      var recovery_routine = $("input[name='recovery-routine']:checked").val();
+      var stimulation = $("input[name='stimulation']:checked").val();
       // Send a POST request to the server with the form data
       $.ajax({
         type: "POST",
         url: "/activity_level",
-        data: {activity_level: activity_level, recovery_routine: recovery_routine},
+        data: {activity_level: activity_level, stimulation: stimulation},
         success: function(){
           window.location.href = '/food';
         }
       });
     });
-  });
 </script>
 
 </body>
